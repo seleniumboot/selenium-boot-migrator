@@ -34,13 +34,22 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /** Copies a project and applies only transformations that can be performed mechanically. */
 public final class Migrator {
 
     private static final String SELENIUM_BOOT_VERSION = "3.5.0";
-    private static final Set<String> EXCLUDED_DIRECTORIES = Set.of(".git", "target", "node_modules");
+    private static final Set<String> EXCLUDED_DIRECTORIES = Set.of(".git", "target", "build", ".gradle", "node_modules");
+    private static final Pattern GRADLE_STRING_DEPENDENCY = Pattern.compile(
+            "(?m)^(?!(?:\\s*//|\\s*/\\*|\\s*\\*))(.*?)(?:(\"\"\"|['\"]))\\s*org\\.seleniumhq\\.selenium:selenium-java(?::[^'\"\\r\\n]+)?\\s*\\2");
+    private static final Pattern GRADLE_MAP_GROUP_FIRST = Pattern.compile(
+            "(?m)^(?!(?:\\s*//|\\s*/\\*|\\s*\\*))(.*?)\\bgroup\\s*(:|=>|=)\\s*(['\"])org\\.seleniumhq\\.selenium\\3\\s*,\\s*name\\s*\\2\\s*(['\"])selenium-java\\4(?:\\s*,\\s*version\\s*\\2\\s*['\"][^'\"]*['\"])?");
+    private static final Pattern GRADLE_MAP_NAME_FIRST = Pattern.compile(
+            "(?m)^(?!(?:\\s*//|\\s*/\\*|\\s*\\*))(.*?)\\bname\\s*(:|=>|=)\\s*(['\"])selenium-java\\3\\s*,\\s*group\\s*\\2\\s*(['\"])org\\.seleniumhq\\.selenium\\4(?:\\s*,\\s*version\\s*\\2\\s*['\"][^'\"]*['\"])?");
+    private static final Pattern GRADLE_MULTI_ARG = Pattern.compile(
+            "(?m)^(?!(?:\\s*//|\\s*/\\*|\\s*\\*))(.*?)(['\"])org\\.seleniumhq\\.selenium\\2\\s*,\\s*(['\"])selenium-java\\3(?:\\s*,\\s*['\"][^'\"]*['\"])?");
 
     public record Result(Path output, List<String> applied, List<String> notes, Report remaining) { }
 
@@ -69,10 +78,27 @@ public final class Migrator {
         List<String> notes = new ArrayList<>();
         Set<String> removedTypes = transformJava(destination, applied);
         List<Finding> danglingReferences = findDanglingReferences(destination, removedTypes);
-        if (!migratePom(destination.resolve("pom.xml"))) {
+        List<Path> buildFiles = BuildFileAnalyzer.findBuildFiles(destination);
+        if (buildFiles.isEmpty()) {
             notes.add("pom.xml: no org.seleniumhq.selenium:selenium-java dependency found to replace.");
         } else {
-            applied.add("pom.xml: replaced selenium-java with io.github.seleniumboot:selenium-boot:" + SELENIUM_BOOT_VERSION);
+            for (Path buildFile : buildFiles) {
+                String relPath = destination.relativize(buildFile).toString().replace('\\', '/');
+                String name = buildFile.getFileName().toString();
+                if (name.equals("pom.xml")) {
+                    if (!migratePom(buildFile)) {
+                        notes.add(relPath + ": no org.seleniumhq.selenium:selenium-java dependency found to replace.");
+                    } else {
+                        applied.add(relPath + ": replaced selenium-java with io.github.seleniumboot:selenium-boot:" + SELENIUM_BOOT_VERSION);
+                    }
+                } else if (name.equals("build.gradle") || name.equals("build.gradle.kts")) {
+                    if (!migrateGradle(buildFile)) {
+                        notes.add(relPath + ": no org.seleniumhq.selenium:selenium-java dependency found to replace.");
+                    } else {
+                        applied.add(relPath + ": replaced selenium-java with io.github.seleniumboot:selenium-boot:" + SELENIUM_BOOT_VERSION);
+                    }
+                }
+            }
         }
         Report outputAnalysis = new Analyzer().analyze(destination);
         Report remaining = includeSourceManualFindings(sourceAnalysis, outputAnalysis, danglingReferences);
@@ -88,7 +114,7 @@ public final class Migrator {
         Set<String> unparsable = new LinkedHashSet<>(source.unparsable());
         unparsable.addAll(output.unparsable());
         return new Report(output.filesFound(), output.filesParsed(), List.copyOf(unparsable), List.copyOf(findings),
-                source.detectedTechnologies(), source.recognizedTechnologies(), source.locatorCounts());
+            source.detectedTechnologies(), source.recognizedTechnologies(), source.locatorCounts());
     }
 
     private static void copyProject(Path source, Path destination) throws IOException {
@@ -332,5 +358,33 @@ public final class Migrator {
         Element child = parent.getOwnerDocument().createElement(name);
         child.setTextContent(value);
         parent.appendChild(child);
+    }
+
+    private static boolean migrateGradle(Path buildFile) throws IOException {
+        if (!Files.isRegularFile(buildFile)) return false;
+        try {
+            String original = Files.readString(buildFile);
+            String updated = GRADLE_STRING_DEPENDENCY.matcher(original).replaceAll(
+                    mr -> mr.group(1) + mr.group(2) + "io.github.seleniumboot:selenium-boot:" + SELENIUM_BOOT_VERSION + mr.group(2));
+            updated = GRADLE_MAP_GROUP_FIRST.matcher(updated).replaceAll(
+                    mr -> mr.group(1) + "group" + mr.group(2) + " " + mr.group(3) + "io.github.seleniumboot" + mr.group(3)
+                            + ", name" + mr.group(2) + " " + mr.group(4) + "selenium-boot" + mr.group(4)
+                            + ", version" + mr.group(2) + " " + mr.group(3) + SELENIUM_BOOT_VERSION + mr.group(3));
+            updated = GRADLE_MAP_NAME_FIRST.matcher(updated).replaceAll(
+                    mr -> mr.group(1) + "name" + mr.group(2) + " " + mr.group(3) + "selenium-boot" + mr.group(3)
+                            + ", group" + mr.group(2) + " " + mr.group(4) + "io.github.seleniumboot" + mr.group(4)
+                            + ", version" + mr.group(2) + " " + mr.group(4) + SELENIUM_BOOT_VERSION + mr.group(4));
+            updated = GRADLE_MULTI_ARG.matcher(updated).replaceAll(
+                    mr -> mr.group(1) + mr.group(2) + "io.github.seleniumboot" + mr.group(2)
+                            + ", " + mr.group(3) + "selenium-boot" + mr.group(3)
+                            + ", " + mr.group(2) + SELENIUM_BOOT_VERSION + mr.group(2));
+
+            if (original.equals(updated)) return false;
+            Files.writeString(buildFile, updated);
+            return true;
+        } catch (Exception exception) {
+            if (exception instanceof IOException ioException) throw ioException;
+            throw new IOException("could not update " + buildFile + ": " + exception.getMessage(), exception);
+        }
     }
 }

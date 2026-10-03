@@ -54,7 +54,7 @@ final class BuildFileAnalyzer {
         return List.copyOf(detected);
     }
 
-    private static List<Path> findBuildFiles(Path root) throws IOException {
+    static List<Path> findBuildFiles(Path root) throws IOException {
         List<Path> buildFiles = new ArrayList<>();
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override

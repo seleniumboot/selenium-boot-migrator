@@ -183,6 +183,161 @@ class MigratorTest {
         assertEquals("unchanged", Files.readString(project.resolve("source.txt")));
     }
 
+    @Test
+    void migratesGradleGroovyProjectWithoutChangingOriginal() throws Exception {
+        Path project = temp.resolve("gradle-groovy-project");
+        Path output = temp.resolve("gradle-groovy-migrated");
+        write(project.resolve("build.gradle"), """
+                plugins {
+                    id 'java'
+                }
+
+                dependencies {
+                    implementation 'org.seleniumhq.selenium:selenium-java:4.21.0'
+                    testImplementation 'org.testng:testng:7.10.2'
+                }
+                """);
+        write(project.resolve("src/main/java/fixture/DriverFactory.java"), """
+                package fixture;
+                import org.openqa.selenium.WebDriver;
+                public class DriverFactory {
+                    private static final ThreadLocal<WebDriver> DRIVER = new ThreadLocal<>();
+                }
+                """);
+        write(project.resolve(".gradle/caches/cache.bin"), "gradle cache");
+        write(project.resolve("build/libs/app.jar"), "build jar");
+        Map<Path, byte[]> original = snapshot(project);
+
+        Migrator.Result result = new Migrator().migrate(project, output);
+
+        assertEquals(original.keySet(), snapshot(project).keySet());
+        original.forEach((path, bytes) -> assertArrayEquals(bytes, read(project.resolve(path))));
+        assertFalse(Files.exists(output.resolve(".gradle")));
+        assertFalse(Files.exists(output.resolve("build")));
+        assertFalse(Files.exists(output.resolve("src/main/java/fixture/DriverFactory.java")));
+
+        String gradle = Files.readString(output.resolve("build.gradle"));
+        assertTrue(gradle.contains("implementation 'io.github.seleniumboot:selenium-boot:3.5.0'"));
+        assertTrue(gradle.contains("testImplementation 'org.testng:testng:7.10.2'"));
+        assertFalse(gradle.contains("org.seleniumhq.selenium:selenium-java"));
+
+        assertTrue(result.applied().contains("build.gradle: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.5.0"));
+        assertTrue(result.remaining().detectedTechnologies().contains("Dependency: org.seleniumhq.selenium:selenium-java:4.21.0"));
+        assertFalse(result.remaining().detectedTechnologies().contains("Dependency: io.github.seleniumboot:selenium-boot:3.5.0"));
+        assertTrue(result.remaining().detectedTechnologies().contains("Dependency: org.testng:testng:7.10.2"));
+        assertTrue(result.remaining().detectedTechnologies().contains("Build system: Gradle (Groovy DSL)"));
+    }
+
+    @Test
+    void migratesGradleKotlinProjectWithoutChangingOriginal() throws Exception {
+        Path project = temp.resolve("gradle-kotlin-project");
+        Path output = temp.resolve("gradle-kotlin-migrated");
+        write(project.resolve("build.gradle.kts"), """
+                plugins {
+                    java
+                }
+
+                dependencies {
+                    implementation("org.seleniumhq.selenium:selenium-java:4.21.0")
+                    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+                }
+                """);
+        Map<Path, byte[]> original = snapshot(project);
+
+        Migrator.Result result = new Migrator().migrate(project, output);
+
+        assertEquals(original.keySet(), snapshot(project).keySet());
+        original.forEach((path, bytes) -> assertArrayEquals(bytes, read(project.resolve(path))));
+
+        String gradleKts = Files.readString(output.resolve("build.gradle.kts"));
+        assertTrue(gradleKts.contains("implementation(\"io.github.seleniumboot:selenium-boot:3.5.0\")"));
+        assertTrue(gradleKts.contains("testImplementation(\"org.junit.jupiter:junit-jupiter:5.10.2\")"));
+        assertFalse(gradleKts.contains("org.seleniumhq.selenium:selenium-java"));
+
+        assertTrue(result.applied().contains("build.gradle.kts: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.5.0"));
+        assertTrue(result.remaining().detectedTechnologies().contains("Dependency: org.seleniumhq.selenium:selenium-java:4.21.0"));
+        assertFalse(result.remaining().detectedTechnologies().contains("Dependency: io.github.seleniumboot:selenium-boot:3.5.0"));
+        assertTrue(result.remaining().detectedTechnologies().contains("Dependency: org.junit.jupiter:junit-jupiter:5.10.2"));
+        assertTrue(result.remaining().detectedTechnologies().contains("Build system: Gradle (Kotlin DSL)"));
+    }
+
+    @Test
+    void migratesFromGradleFixtures() throws Exception {
+        Path groovyFixture = Path.of(MigratorTest.class.getResource("/gradle-groovy").toURI());
+        Path groovyOutput = temp.resolve("fixture-groovy-migrated");
+        Migrator.Result groovyResult = new Migrator().migrate(groovyFixture, groovyOutput);
+        assertTrue(groovyResult.applied().contains("build.gradle: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.5.0"));
+        assertTrue(Files.readString(groovyOutput.resolve("build.gradle")).contains("io.github.seleniumboot:selenium-boot:3.5.0"));
+
+        Path kotlinFixture = Path.of(MigratorTest.class.getResource("/gradle-kotlin").toURI());
+        Path kotlinOutput = temp.resolve("fixture-kotlin-migrated");
+        Migrator.Result kotlinResult = new Migrator().migrate(kotlinFixture, kotlinOutput);
+        assertTrue(kotlinResult.applied().contains("build.gradle.kts: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.5.0"));
+        assertTrue(Files.readString(kotlinOutput.resolve("build.gradle.kts")).contains("io.github.seleniumboot:selenium-boot:3.5.0"));
+    }
+
+    @Test
+    void reportsNoteWhenGradleBuildHasNoSeleniumJava() throws Exception {
+        Path project = temp.resolve("gradle-no-selenium");
+        Path output = temp.resolve("gradle-no-selenium-migrated");
+        write(project.resolve("build.gradle"), """
+                plugins {
+                    id 'java'
+                }
+                dependencies {
+                    testImplementation 'org.testng:testng:7.10.2'
+                }
+                """);
+        Migrator.Result result = new Migrator().migrate(project, output);
+        assertTrue(result.notes().contains("build.gradle: no org.seleniumhq.selenium:selenium-java dependency found to replace."));
+        assertFalse(result.applied().stream().anyMatch(applied -> applied.contains("build.gradle")));
+    }
+
+    @Test
+    void supportsVariousGradleSyntaxStyles() throws Exception {
+        Path project = temp.resolve("gradle-syntax");
+        Path output = temp.resolve("gradle-syntax-migrated");
+        write(project.resolve("build.gradle"), """
+                dependencies {
+                    // Comments should not be touched:
+                    // implementation 'org.seleniumhq.selenium:selenium-java:4.21.0'
+                    /* testImplementation 'org.seleniumhq.selenium:selenium-java:4.21.0' */
+                    * implementation 'org.seleniumhq.selenium:selenium-java:4.21.0'
+
+                    // Double quotes with and without version:
+                    implementation "org.seleniumhq.selenium:selenium-java:4.21.0"
+                    api "org.seleniumhq.selenium:selenium-java"
+
+                    // Map notation:
+                    testImplementation group: 'org.seleniumhq.selenium', name: 'selenium-java', version: '4.21.0'
+                    compileOnly name: 'selenium-java', group: 'org.seleniumhq.selenium'
+
+                    // Multi-arg notation:
+                    runtimeOnly 'org.seleniumhq.selenium', 'selenium-java', '4.21.0'
+
+                    // Parentheses with exclude block:
+                    implementation('org.seleniumhq.selenium:selenium-java:4.21.0') {
+                        exclude group: 'org.hamcrest'
+                    }
+                }
+                """);
+        Migrator.Result result = new Migrator().migrate(project, output);
+        assertTrue(result.applied().contains("build.gradle: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.5.0"));
+
+        String migrated = Files.readString(output.resolve("build.gradle"));
+        assertTrue(migrated.contains("// implementation 'org.seleniumhq.selenium:selenium-java:4.21.0'"));
+        assertTrue(migrated.contains("/* testImplementation 'org.seleniumhq.selenium:selenium-java:4.21.0' */"));
+        assertTrue(migrated.contains("* implementation 'org.seleniumhq.selenium:selenium-java:4.21.0'"));
+
+        assertTrue(migrated.contains("implementation \"io.github.seleniumboot:selenium-boot:3.5.0\""));
+        assertTrue(migrated.contains("api \"io.github.seleniumboot:selenium-boot:3.5.0\""));
+        assertTrue(migrated.contains("testImplementation group: 'io.github.seleniumboot', name: 'selenium-boot', version: '3.5.0'"));
+        assertTrue(migrated.contains("compileOnly name: 'selenium-boot', group: 'io.github.seleniumboot', version: '3.5.0'"));
+        assertTrue(migrated.contains("runtimeOnly 'io.github.seleniumboot', 'selenium-boot', '3.5.0'"));
+        assertTrue(migrated.contains("implementation('io.github.seleniumboot:selenium-boot:3.5.0') {"));
+        assertTrue(migrated.contains("exclude group: 'org.hamcrest'"));
+    }
+
     private static void write(Path path, String content) throws Exception {
         Files.createDirectories(path.getParent());
         Files.writeString(path, content);
