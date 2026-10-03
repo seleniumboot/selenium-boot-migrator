@@ -277,6 +277,15 @@ class MigratorTest {
     }
 
     @Test
+    void reportsNoteWhenNoBuildFileExists() throws Exception {
+        Path project = temp.resolve("no-build-file");
+        Path output = temp.resolve("no-build-file-migrated");
+        write(project.resolve("src/test/java/App.java"), "class App { }\n");
+        Migrator.Result result = new Migrator().migrate(project, output);
+        assertTrue(result.notes().stream().anyMatch(n -> n.startsWith("No pom.xml, build.gradle or build.gradle.kts found")));
+    }
+
+    @Test
     void reportsNoteWhenGradleBuildHasNoSeleniumJava() throws Exception {
         Path project = temp.resolve("gradle-no-selenium");
         Path output = temp.resolve("gradle-no-selenium-migrated");

@@ -80,7 +80,7 @@ public final class Migrator {
         List<Finding> danglingReferences = findDanglingReferences(destination, removedTypes);
         List<Path> buildFiles = BuildFileAnalyzer.findBuildFiles(destination);
         if (buildFiles.isEmpty()) {
-            notes.add("pom.xml: no org.seleniumhq.selenium:selenium-java dependency found to replace.");
+            notes.add("No pom.xml, build.gradle or build.gradle.kts found; add io.github.seleniumboot:selenium-boot:" + SELENIUM_BOOT_VERSION + " manually.");
         } else {
             for (Path buildFile : buildFiles) {
                 String relPath = destination.relativize(buildFile).toString().replace('\\', '/');
@@ -114,7 +114,7 @@ public final class Migrator {
         Set<String> unparsable = new LinkedHashSet<>(source.unparsable());
         unparsable.addAll(output.unparsable());
         return new Report(output.filesFound(), output.filesParsed(), List.copyOf(unparsable), List.copyOf(findings),
-            source.detectedTechnologies(), source.recognizedTechnologies(), source.locatorCounts());
+                source.detectedTechnologies(), source.recognizedTechnologies(), source.locatorCounts());
     }
 
     private static void copyProject(Path source, Path destination) throws IOException {
