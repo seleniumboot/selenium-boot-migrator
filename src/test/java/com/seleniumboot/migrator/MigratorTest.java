@@ -277,6 +277,58 @@ class MigratorTest {
     }
 
     @Test
+    void migratesSeleniumJavaInGradleVersionCatalog() throws Exception {
+        Path project = temp.resolve("catalog");
+        Path output = temp.resolve("catalog-migrated");
+        write(project.resolve("build.gradle.kts"), """
+                plugins { java }
+                dependencies {
+                    implementation(libs.selenium.java)
+                    implementation(libs.selenium.chrome.driver)
+                }
+                """);
+        write(project.resolve("gradle/libs.versions.toml"), """
+                [versions]
+                selenium = "4.21.0"
+
+                [libraries]
+                # selenium-java = "org.seleniumhq.selenium:selenium-java:1.0"
+                selenium-java = { module = "org.seleniumhq.selenium:selenium-java", version.ref = "selenium" } # main
+                selenium-chrome-driver = { module = "org.seleniumhq.selenium:selenium-chrome-driver", version.ref = "selenium" }
+                junit = "org.junit.jupiter:junit-jupiter:5.10.2"
+                """);
+        Migrator.Result result = new Migrator().migrate(project, output);
+
+        String toml = Files.readString(output.resolve("gradle/libs.versions.toml"));
+        assertTrue(toml.contains("selenium-java = { module = \"io.github.seleniumboot:selenium-boot\", version = \"3.5.0\" } # main"));
+        assertTrue(toml.contains("# selenium-java = \"org.seleniumhq.selenium:selenium-java:1.0\""), "comment untouched");
+        assertTrue(toml.contains("selenium-chrome-driver = { module = \"org.seleniumhq.selenium:selenium-chrome-driver\""), "other entries untouched");
+        assertTrue(toml.contains("junit = \"org.junit.jupiter:junit-jupiter:5.10.2\""));
+        assertTrue(result.applied().stream().anyMatch(a -> a.startsWith("gradle/libs.versions.toml: replaced selenium-java catalog entry")));
+        assertTrue(result.notes().stream().noneMatch(n -> n.startsWith("build.gradle.kts: no org.seleniumhq")),
+                "a catalog hit must not produce a misleading 'no dependency' note");
+        assertTrue(Files.readString(project.resolve("gradle/libs.versions.toml")).contains("org.seleniumhq.selenium:selenium-java\", version.ref"),
+                "original project untouched");
+    }
+
+    @Test
+    void migratesCatalogStringAndGroupNameForms() throws Exception {
+        Path project = temp.resolve("catalog-forms");
+        Path output = temp.resolve("catalog-forms-migrated");
+        write(project.resolve("build.gradle"), "dependencies { implementation libs.sel }\n");
+        write(project.resolve("gradle/libs.versions.toml"), """
+                [libraries]
+                sel = "org.seleniumhq.selenium:selenium-java:4.21.0"
+                sel2 = { group = "org.seleniumhq.selenium", name = "selenium-java", version = "4.21.0" }
+                """);
+        new Migrator().migrate(project, output);
+        String toml = Files.readString(output.resolve("gradle/libs.versions.toml"));
+        assertTrue(toml.contains("sel = { module = \"io.github.seleniumboot:selenium-boot\", version = \"3.5.0\" }"));
+        assertTrue(toml.contains("sel2 = { module = \"io.github.seleniumboot:selenium-boot\", version = \"3.5.0\" }"));
+        assertFalse(toml.contains("org.seleniumhq.selenium:selenium-java"));
+    }
+
+    @Test
     void reportsNoteWhenNoBuildFileExists() throws Exception {
         Path project = temp.resolve("no-build-file");
         Path output = temp.resolve("no-build-file-migrated");

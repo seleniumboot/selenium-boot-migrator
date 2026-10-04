@@ -77,6 +77,30 @@ final class BuildFileAnalyzer {
         return buildFiles;
     }
 
+    /** Gradle version catalogs: {@code libs.versions.toml} and any other {@code *.versions.toml}. */
+    static List<Path> findVersionCatalogs(Path root) throws IOException {
+        List<Path> catalogs = new ArrayList<>();
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+                if (!directory.equals(root) && IGNORED_DIRECTORIES.contains(directory.getFileName().toString())) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
+                if (attributes.isRegularFile() && file.getFileName().toString().endsWith(".versions.toml")) {
+                    catalogs.add(file);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        catalogs.sort(Path::compareTo);
+        return catalogs;
+    }
+
     private static boolean isBuildFile(String name) {
         return name.equals("pom.xml") || name.equals("build.gradle") || name.equals("build.gradle.kts");
     }

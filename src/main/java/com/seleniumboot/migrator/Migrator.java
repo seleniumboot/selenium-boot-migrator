@@ -48,6 +48,13 @@ public final class Migrator {
             "(?m)^(?!(?:\\s*//|\\s*/\\*|\\s*\\*))(.*?)\\bgroup\\s*(:|=>|=)\\s*(['\"])org\\.seleniumhq\\.selenium\\3\\s*,\\s*name\\s*\\2\\s*(['\"])selenium-java\\4(?:\\s*,\\s*version\\s*\\2\\s*['\"][^'\"]*['\"])?");
     private static final Pattern GRADLE_MAP_NAME_FIRST = Pattern.compile(
             "(?m)^(?!(?:\\s*//|\\s*/\\*|\\s*\\*))(.*?)\\bname\\s*(:|=>|=)\\s*(['\"])selenium-java\\3\\s*,\\s*group\\s*\\2\\s*(['\"])org\\.seleniumhq\\.selenium\\4(?:\\s*,\\s*version\\s*\\2\\s*['\"][^'\"]*['\"])?");
+    private static final Pattern CATALOG_STRING_ENTRY = Pattern.compile(
+            "^(\\s*[\\w.-]+\\s*=\\s*)([\"'])org\\.seleniumhq\\.selenium:selenium-java(?::[^\"']*)?\\2(\\s*#.*)?$");
+    private static final Pattern CATALOG_MODULE_ENTRY = Pattern.compile(
+            "^(\\s*[\\w.-]+\\s*=\\s*)\\{[^}]*\\bmodule\\s*=\\s*[\"']org\\.seleniumhq\\.selenium:selenium-java[\"'][^}]*\\}(\\s*#.*)?$");
+    private static final Pattern CATALOG_GROUP_NAME_ENTRY = Pattern.compile(
+            "^(\\s*[\\w.-]+\\s*=\\s*)\\{(?=[^}]*\\bgroup\\s*=\\s*[\"']org\\.seleniumhq\\.selenium[\"'])"
+                    + "(?=[^}]*\\bname\\s*=\\s*[\"']selenium-java[\"'])[^}]*\\}(\\s*#.*)?$");
     private static final Pattern GRADLE_MULTI_ARG = Pattern.compile(
             "(?m)^(?!(?:\\s*//|\\s*/\\*|\\s*\\*))(.*?)(['\"])org\\.seleniumhq\\.selenium\\2\\s*,\\s*(['\"])selenium-java\\3(?:\\s*,\\s*['\"][^'\"]*['\"])?");
 
@@ -82,6 +89,15 @@ public final class Migrator {
         if (buildFiles.isEmpty()) {
             notes.add("No pom.xml, build.gradle or build.gradle.kts found; add io.github.seleniumboot:selenium-boot:" + SELENIUM_BOOT_VERSION + " manually.");
         } else {
+            boolean catalogMigrated = false;
+            for (Path catalog : BuildFileAnalyzer.findVersionCatalogs(destination)) {
+                if (migrateCatalog(catalog)) {
+                    catalogMigrated = true;
+                    applied.add(destination.relativize(catalog).toString().replace('\\', '/')
+                            + ": replaced selenium-java catalog entry with io.github.seleniumboot:selenium-boot:"
+                            + SELENIUM_BOOT_VERSION + " (alias unchanged, so existing libs.* references keep working)");
+                }
+            }
             for (Path buildFile : buildFiles) {
                 String relPath = destination.relativize(buildFile).toString().replace('\\', '/');
                 String name = buildFile.getFileName().toString();
@@ -93,7 +109,7 @@ public final class Migrator {
                     }
                 } else if (name.equals("build.gradle") || name.equals("build.gradle.kts")) {
                     if (!migrateGradle(buildFile)) {
-                        notes.add(relPath + ": no org.seleniumhq.selenium:selenium-java dependency found to replace.");
+                        if (!catalogMigrated) notes.add(relPath + ": no org.seleniumhq.selenium:selenium-java dependency found to replace.");
                     } else {
                         applied.add(relPath + ": replaced selenium-java with io.github.seleniumboot:selenium-boot:" + SELENIUM_BOOT_VERSION);
                     }
@@ -358,6 +374,33 @@ public final class Migrator {
         Element child = parent.getOwnerDocument().createElement(name);
         child.setTextContent(value);
         parent.appendChild(child);
+    }
+
+    /** Rewrites single-line {@code selenium-java} entries in a version catalog; the alias is kept. */
+    private static boolean migrateCatalog(Path catalog) throws IOException {
+        String original = Files.readString(catalog);
+        String entry = "{ module = \"io.github.seleniumboot:selenium-boot\", version = \"" + SELENIUM_BOOT_VERSION + "\" }";
+        StringBuilder out = new StringBuilder();
+        boolean changed = false;
+        for (String line : original.split("\n", -1)) {
+            String updated = line;
+            if (!line.stripLeading().startsWith("#")) {
+                for (Pattern pattern : List.of(CATALOG_STRING_ENTRY, CATALOG_MODULE_ENTRY, CATALOG_GROUP_NAME_ENTRY)) {
+                    java.util.regex.Matcher m = pattern.matcher(line);
+                    if (m.matches()) {
+                        String comment = m.group(m.groupCount());
+                        updated = m.group(1) + entry + (comment != null ? comment : "");
+                        break;
+                    }
+                }
+            }
+            changed |= !updated.equals(line);
+            out.append(updated).append('\n');
+        }
+        if (!changed) return false;
+        out.setLength(out.length() - 1);
+        Files.writeString(catalog, out.toString());
+        return true;
     }
 
     private static boolean migrateGradle(Path buildFile) throws IOException {
