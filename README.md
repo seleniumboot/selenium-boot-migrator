@@ -37,7 +37,9 @@ uses the published Selenium Boot `3.5.0` release.
 `analyze` reports counts per rule, what maps cleanly vs. needs review, and an *estimated* confidence.
 The estimate is a guide, not a guarantee. The report also lists dependencies found in Maven
 `pom.xml` files and Gradle `build.gradle` / `build.gradle.kts` files. Gradle files are inspected
-and migrated as text; a Gradle installation is not required. Direct `selenium-java` declarations (string, map and multi-argument notation) are rewritten, and so are
+and migrated as text; a Gradle installation is not required.
+
+Direct `selenium-java` declarations (string, map and multi-argument notation) are rewritten, and so are
 single-line `selenium-java` entries in a Gradle version catalog (`gradle/libs.versions.toml`); the catalog
 alias is kept, so existing `libs.selenium.java` references keep working. Multi-line `[libraries.x]` table
 entries are not rewritten and need a manual change.
