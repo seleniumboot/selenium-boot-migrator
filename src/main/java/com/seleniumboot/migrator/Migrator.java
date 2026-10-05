@@ -382,7 +382,10 @@ public final class Migrator {
         String entry = "{ module = \"io.github.seleniumboot:selenium-boot\", version = \"" + SELENIUM_BOOT_VERSION + "\" }";
         StringBuilder out = new StringBuilder();
         boolean changed = false;
-        for (String line : original.split("\n", -1)) {
+        List<String> lines = migrateCatalogTables(List.of(original.split("\n", -1)));
+        changed |= lines.size() != original.split("\n", -1).length
+                || !String.join("\n", lines).equals(original);
+        for (String line : lines) {
             String updated = line;
             if (!line.stripLeading().startsWith("#")) {
                 for (Pattern pattern : List.of(CATALOG_STRING_ENTRY, CATALOG_MODULE_ENTRY, CATALOG_GROUP_NAME_ENTRY)) {
@@ -401,6 +404,64 @@ public final class Migrator {
         out.setLength(out.length() - 1);
         Files.writeString(catalog, out.toString());
         return true;
+    }
+
+    private static final Pattern CATALOG_LIBRARY_TABLE = Pattern.compile("^\\s*\\[libraries\\.[\\w.-]+\\]\\s*(#.*)?$");
+    private static final Pattern CATALOG_ANY_TABLE = Pattern.compile("^\\s*\\[.*");
+    private static final Pattern CATALOG_TABLE_KEY = Pattern.compile("^\\s*(module|group|name|version(?:\\.ref)?)\\s*=\\s*(.*?)\\s*(#.*)?$");
+
+    /**
+     * Rewrites multi-line {@code [libraries.x]} tables whose module is {@code selenium-java}: the module and
+     * version keys collapse to the Selenium Boot coordinates; the header (alias) and other lines are kept.
+     */
+    private static List<String> migrateCatalogTables(List<String> lines) {
+        List<String> out = new ArrayList<>();
+        int i = 0;
+        while (i < lines.size()) {
+            String line = lines.get(i);
+            if (!CATALOG_LIBRARY_TABLE.matcher(line).matches()) {
+                out.add(line);
+                i++;
+                continue;
+            }
+            int end = i + 1;
+            while (end < lines.size() && !CATALOG_ANY_TABLE.matcher(lines.get(end)).matches()) end++;
+            String module = null, group = null, name = null;
+            for (int j = i + 1; j < end; j++) {
+                java.util.regex.Matcher m = CATALOG_TABLE_KEY.matcher(lines.get(j));
+                if (!m.matches() || lines.get(j).stripLeading().startsWith("#")) continue;
+                String value = m.group(2).replaceAll("^[\"']|[\"']$", "");
+                switch (m.group(1)) {
+                    case "module" -> module = value;
+                    case "group" -> group = value;
+                    case "name" -> name = value;
+                    default -> { }
+                }
+            }
+            boolean isSelenium = "org.seleniumhq.selenium:selenium-java".equals(module)
+                    || ("org.seleniumhq.selenium".equals(group) && "selenium-java".equals(name));
+            if (!isSelenium) {
+                out.addAll(lines.subList(i, end));
+                i = end;
+                continue;
+            }
+            out.add(line);
+            boolean emitted = false;
+            for (int j = i + 1; j < end; j++) {
+                java.util.regex.Matcher m = CATALOG_TABLE_KEY.matcher(lines.get(j));
+                if (m.matches() && !lines.get(j).stripLeading().startsWith("#")) {
+                    if (!emitted) {
+                        out.add("module = \"io.github.seleniumboot:selenium-boot\"");
+                        out.add("version = \"" + SELENIUM_BOOT_VERSION + "\"");
+                        emitted = true;
+                    }
+                } else {
+                    out.add(lines.get(j));
+                }
+            }
+            i = end;
+        }
+        return out;
     }
 
     private static boolean migrateGradle(Path buildFile) throws IOException {

@@ -40,9 +40,8 @@ The estimate is a guide, not a guarantee. The report also lists dependencies fou
 and migrated as text; a Gradle installation is not required.
 
 Direct `selenium-java` declarations (string, map and multi-argument notation) are rewritten, and so are
-single-line `selenium-java` entries in a Gradle version catalog (`gradle/libs.versions.toml`); the catalog
-alias is kept, so existing `libs.selenium.java` references keep working. Multi-line `[libraries.x]` table
-entries are not rewritten and need a manual change.
+`selenium-java` entries in a Gradle version catalog (`gradle/libs.versions.toml`), in both inline and
+`[libraries.x]` table form; the catalog alias is kept, so existing `libs.selenium.java` references keep working.
 
 ### CLI Options
 

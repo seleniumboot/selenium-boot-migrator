@@ -329,6 +329,37 @@ class MigratorTest {
     }
 
     @Test
+    void migratesMultiLineCatalogTables() throws Exception {
+        Path project = temp.resolve("catalog-tables");
+        Path output = temp.resolve("catalog-tables-migrated");
+        write(project.resolve("build.gradle"), "dependencies { implementation libs.sel }\n");
+        write(project.resolve("gradle/libs.versions.toml"), """
+                [versions]
+                selenium = "4.21.0"
+
+                [libraries.sel]
+                module = "org.seleniumhq.selenium:selenium-java"
+                version.ref = "selenium"
+
+                [libraries.sel2]
+                group = "org.seleniumhq.selenium"
+                name = "selenium-java"
+                version = "4.21.0"
+
+                [libraries.junit]
+                module = "org.junit.jupiter:junit-jupiter"
+                version = "5.10.0"
+                """);
+        new Migrator().migrate(project, output);
+        String toml = Files.readString(output.resolve("gradle/libs.versions.toml"));
+        assertFalse(toml.contains("org.seleniumhq.selenium"));
+        assertFalse(toml.contains("version.ref"));
+        assertEquals(2, toml.split("module = \"io.github.seleniumboot:selenium-boot\"", -1).length - 1);
+        assertTrue(toml.contains("[libraries.sel]"));
+        assertTrue(toml.contains("module = \"org.junit.jupiter:junit-jupiter\"\nversion = \"5.10.0\""));
+    }
+
+    @Test
     void reportsNoteWhenNoBuildFileExists() throws Exception {
         Path project = temp.resolve("no-build-file");
         Path output = temp.resolve("no-build-file-migrated");
