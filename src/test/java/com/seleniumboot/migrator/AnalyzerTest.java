@@ -21,6 +21,21 @@ class AnalyzerTest {
     }
 
     @Test
+    void parsesJava22UnnamedVariables() {
+        var report = new Analyzer().analyzeSource("""
+            import java.util.Map;
+            public class Cache {
+                static final ThreadLocal<WebDriver> DRIVER = new ThreadLocal<>();
+                static Map<String, Integer> merged(Map<String, Integer> m) {
+                    return m.entrySet().stream().collect(
+                        java.util.stream.Collectors.toMap(e -> e.getKey(), e -> e.getValue(), (_, b) -> b));
+                }
+            }""");
+        assertTrue(report.unparsable().isEmpty(), "unparsable: " + report.unparsable());
+        assertTrue(report.findings().stream().anyMatch(f -> f.ruleId().equals("MIG-001")));
+    }
+
+    @Test
     void detectsThreadLocalDriverAndWebDriverManager() {
         var r = rules("""
             public class DriverFactory {

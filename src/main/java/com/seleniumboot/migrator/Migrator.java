@@ -61,7 +61,7 @@ public final class Migrator {
     public record Result(Path output, List<String> applied, List<String> notes, Report remaining) { }
 
     private final JavaParser parser = new JavaParser(
-            new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17));
+            new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25));
 
     public Result migrate(Path project, Path output) throws IOException {
         Path source = project.toAbsolutePath().normalize();
