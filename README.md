@@ -32,7 +32,7 @@ java -jar target/selenium-boot-migrator.jar migrate ./my-selenium-project --out 
 The output directory must not already exist and cannot be the source directory or one of its
 children. Migration output lists applied changes, compatibility notes, and any findings still
 requiring manual review. The build descriptor rewrite (`pom.xml`, `build.gradle`, `build.gradle.kts`)
-uses the published Selenium Boot `3.9.0` release.
+uses the published Selenium Boot `3.10.0` release.
 
 `analyze` reports counts per rule, what maps cleanly vs. needs review, and an *estimated* confidence.
 The estimate is a guide, not a guarantee. The report also lists dependencies found in Maven

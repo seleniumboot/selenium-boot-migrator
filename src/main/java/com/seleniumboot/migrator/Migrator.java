@@ -40,7 +40,7 @@ import java.util.stream.Stream;
 /** Copies a project and applies only transformations that can be performed mechanically. */
 public final class Migrator {
 
-    private static final String SELENIUM_BOOT_VERSION = "3.9.0";
+    private static final String SELENIUM_BOOT_VERSION = "3.10.0";
     private static final Set<String> EXCLUDED_DIRECTORIES = Set.of(".git", "target", "build", ".gradle", "node_modules");
     private static final Pattern GRADLE_STRING_DEPENDENCY = Pattern.compile(
             "(?m)^(?!(?:\\s*//|\\s*/\\*|\\s*\\*))(.*?)(?:(\"\"\"|['\"]))\\s*org\\.seleniumhq\\.selenium:selenium-java(?::[^'\"\\r\\n]+)?\\s*\\2");
