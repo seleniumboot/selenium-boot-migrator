@@ -103,7 +103,7 @@ class MigratorTest {
         String pom = Files.readString(output.resolve("pom.xml"));
         assertTrue(pom.contains("<groupId>io.github.seleniumboot</groupId>"));
         assertTrue(pom.contains("<artifactId>selenium-boot</artifactId>"));
-        assertTrue(pom.contains("<version>3.10.0</version>"));
+        assertTrue(pom.contains("<version>3.11.0</version>"));
         assertTrue(result.remaining().findings().stream().anyMatch(f -> f.ruleId().equals("MIG-014")));
         assertTrue(result.remaining().findings().stream().anyMatch(f -> f.ruleId().equals("MIG-014")
             && f.file().endsWith("DriverFactory.java")));
@@ -157,7 +157,7 @@ class MigratorTest {
             .filter(finding -> finding.ruleId().equals("MIG-017")
                 && finding.file().endsWith("Caller.java"))
             .count());
-        assertTrue(Files.readString(output.resolve("pom.xml")).contains("<version>3.10.0</version>"));
+        assertTrue(Files.readString(output.resolve("pom.xml")).contains("<version>3.11.0</version>"));
 
         assertTrue(Files.isRegularFile(output.resolve("MIGRATION_REPORT.md")));
         String migrationReport = Files.readString(output.resolve("MIGRATION_REPORT.md"));
@@ -217,13 +217,13 @@ class MigratorTest {
         assertFalse(Files.exists(output.resolve("src/main/java/fixture/DriverFactory.java")));
 
         String gradle = Files.readString(output.resolve("build.gradle"));
-        assertTrue(gradle.contains("implementation 'io.github.seleniumboot:selenium-boot:3.10.0'"));
+        assertTrue(gradle.contains("implementation 'io.github.seleniumboot:selenium-boot:3.11.0'"));
         assertTrue(gradle.contains("testImplementation 'org.testng:testng:7.10.2'"));
         assertFalse(gradle.contains("org.seleniumhq.selenium:selenium-java"));
 
-        assertTrue(result.applied().contains("build.gradle: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.10.0"));
+        assertTrue(result.applied().contains("build.gradle: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.11.0"));
         assertTrue(result.remaining().detectedTechnologies().contains("Dependency: org.seleniumhq.selenium:selenium-java:4.21.0"));
-        assertFalse(result.remaining().detectedTechnologies().contains("Dependency: io.github.seleniumboot:selenium-boot:3.10.0"));
+        assertFalse(result.remaining().detectedTechnologies().contains("Dependency: io.github.seleniumboot:selenium-boot:3.11.0"));
         assertTrue(result.remaining().detectedTechnologies().contains("Dependency: org.testng:testng:7.10.2"));
         assertTrue(result.remaining().detectedTechnologies().contains("Build system: Gradle (Groovy DSL)"));
     }
@@ -250,13 +250,13 @@ class MigratorTest {
         original.forEach((path, bytes) -> assertArrayEquals(bytes, read(project.resolve(path))));
 
         String gradleKts = Files.readString(output.resolve("build.gradle.kts"));
-        assertTrue(gradleKts.contains("implementation(\"io.github.seleniumboot:selenium-boot:3.10.0\")"));
+        assertTrue(gradleKts.contains("implementation(\"io.github.seleniumboot:selenium-boot:3.11.0\")"));
         assertTrue(gradleKts.contains("testImplementation(\"org.junit.jupiter:junit-jupiter:5.10.2\")"));
         assertFalse(gradleKts.contains("org.seleniumhq.selenium:selenium-java"));
 
-        assertTrue(result.applied().contains("build.gradle.kts: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.10.0"));
+        assertTrue(result.applied().contains("build.gradle.kts: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.11.0"));
         assertTrue(result.remaining().detectedTechnologies().contains("Dependency: org.seleniumhq.selenium:selenium-java:4.21.0"));
-        assertFalse(result.remaining().detectedTechnologies().contains("Dependency: io.github.seleniumboot:selenium-boot:3.10.0"));
+        assertFalse(result.remaining().detectedTechnologies().contains("Dependency: io.github.seleniumboot:selenium-boot:3.11.0"));
         assertTrue(result.remaining().detectedTechnologies().contains("Dependency: org.junit.jupiter:junit-jupiter:5.10.2"));
         assertTrue(result.remaining().detectedTechnologies().contains("Build system: Gradle (Kotlin DSL)"));
     }
@@ -266,14 +266,14 @@ class MigratorTest {
         Path groovyFixture = Path.of(MigratorTest.class.getResource("/gradle-groovy").toURI());
         Path groovyOutput = temp.resolve("fixture-groovy-migrated");
         Migrator.Result groovyResult = new Migrator().migrate(groovyFixture, groovyOutput);
-        assertTrue(groovyResult.applied().contains("build.gradle: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.10.0"));
-        assertTrue(Files.readString(groovyOutput.resolve("build.gradle")).contains("io.github.seleniumboot:selenium-boot:3.10.0"));
+        assertTrue(groovyResult.applied().contains("build.gradle: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.11.0"));
+        assertTrue(Files.readString(groovyOutput.resolve("build.gradle")).contains("io.github.seleniumboot:selenium-boot:3.11.0"));
 
         Path kotlinFixture = Path.of(MigratorTest.class.getResource("/gradle-kotlin").toURI());
         Path kotlinOutput = temp.resolve("fixture-kotlin-migrated");
         Migrator.Result kotlinResult = new Migrator().migrate(kotlinFixture, kotlinOutput);
-        assertTrue(kotlinResult.applied().contains("build.gradle.kts: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.10.0"));
-        assertTrue(Files.readString(kotlinOutput.resolve("build.gradle.kts")).contains("io.github.seleniumboot:selenium-boot:3.10.0"));
+        assertTrue(kotlinResult.applied().contains("build.gradle.kts: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.11.0"));
+        assertTrue(Files.readString(kotlinOutput.resolve("build.gradle.kts")).contains("io.github.seleniumboot:selenium-boot:3.11.0"));
     }
 
     @Test
@@ -300,7 +300,7 @@ class MigratorTest {
         Migrator.Result result = new Migrator().migrate(project, output);
 
         String toml = Files.readString(output.resolve("gradle/libs.versions.toml"));
-        assertTrue(toml.contains("selenium-java = { module = \"io.github.seleniumboot:selenium-boot\", version = \"3.10.0\" } # main"));
+        assertTrue(toml.contains("selenium-java = { module = \"io.github.seleniumboot:selenium-boot\", version = \"3.11.0\" } # main"));
         assertTrue(toml.contains("# selenium-java = \"org.seleniumhq.selenium:selenium-java:1.0\""), "comment untouched");
         assertTrue(toml.contains("selenium-chrome-driver = { module = \"org.seleniumhq.selenium:selenium-chrome-driver\""), "other entries untouched");
         assertTrue(toml.contains("junit = \"org.junit.jupiter:junit-jupiter:5.10.2\""));
@@ -323,8 +323,8 @@ class MigratorTest {
                 """);
         new Migrator().migrate(project, output);
         String toml = Files.readString(output.resolve("gradle/libs.versions.toml"));
-        assertTrue(toml.contains("sel = { module = \"io.github.seleniumboot:selenium-boot\", version = \"3.10.0\" }"));
-        assertTrue(toml.contains("sel2 = { module = \"io.github.seleniumboot:selenium-boot\", version = \"3.10.0\" }"));
+        assertTrue(toml.contains("sel = { module = \"io.github.seleniumboot:selenium-boot\", version = \"3.11.0\" }"));
+        assertTrue(toml.contains("sel2 = { module = \"io.github.seleniumboot:selenium-boot\", version = \"3.11.0\" }"));
         assertFalse(toml.contains("org.seleniumhq.selenium:selenium-java"));
     }
 
@@ -414,19 +414,19 @@ class MigratorTest {
                 }
                 """);
         Migrator.Result result = new Migrator().migrate(project, output);
-        assertTrue(result.applied().contains("build.gradle: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.10.0"));
+        assertTrue(result.applied().contains("build.gradle: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.11.0"));
 
         String migrated = Files.readString(output.resolve("build.gradle"));
         assertTrue(migrated.contains("// implementation 'org.seleniumhq.selenium:selenium-java:4.21.0'"));
         assertTrue(migrated.contains("/* testImplementation 'org.seleniumhq.selenium:selenium-java:4.21.0' */"));
         assertTrue(migrated.contains("* implementation 'org.seleniumhq.selenium:selenium-java:4.21.0'"));
 
-        assertTrue(migrated.contains("implementation \"io.github.seleniumboot:selenium-boot:3.10.0\""));
-        assertTrue(migrated.contains("api \"io.github.seleniumboot:selenium-boot:3.10.0\""));
-        assertTrue(migrated.contains("testImplementation group: 'io.github.seleniumboot', name: 'selenium-boot', version: '3.10.0'"));
-        assertTrue(migrated.contains("compileOnly name: 'selenium-boot', group: 'io.github.seleniumboot', version: '3.10.0'"));
-        assertTrue(migrated.contains("runtimeOnly 'io.github.seleniumboot', 'selenium-boot', '3.10.0'"));
-        assertTrue(migrated.contains("implementation('io.github.seleniumboot:selenium-boot:3.10.0') {"));
+        assertTrue(migrated.contains("implementation \"io.github.seleniumboot:selenium-boot:3.11.0\""));
+        assertTrue(migrated.contains("api \"io.github.seleniumboot:selenium-boot:3.11.0\""));
+        assertTrue(migrated.contains("testImplementation group: 'io.github.seleniumboot', name: 'selenium-boot', version: '3.11.0'"));
+        assertTrue(migrated.contains("compileOnly name: 'selenium-boot', group: 'io.github.seleniumboot', version: '3.11.0'"));
+        assertTrue(migrated.contains("runtimeOnly 'io.github.seleniumboot', 'selenium-boot', '3.11.0'"));
+        assertTrue(migrated.contains("implementation('io.github.seleniumboot:selenium-boot:3.11.0') {"));
         assertTrue(migrated.contains("exclude group: 'org.hamcrest'"));
     }
 
