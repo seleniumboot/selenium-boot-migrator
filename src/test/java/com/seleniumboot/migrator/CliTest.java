@@ -216,8 +216,8 @@ class CliTest {
         RunResult result = runCli("migrate", fixture("gradle-groovy").toString(), "--out", output.toString());
         assertEquals(0, result.exitCode());
         assertTrue(result.out().contains("Migrated copy:"));
-        assertTrue(result.out().contains("[applied] build.gradle: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.10.0"));
-        assertTrue(Files.readString(output.resolve("build.gradle")).contains("io.github.seleniumboot:selenium-boot:3.10.0"));
+        assertTrue(result.out().contains("[applied] build.gradle: replaced selenium-java with io.github.seleniumboot:selenium-boot:3.11.0"));
+        assertTrue(Files.readString(output.resolve("build.gradle")).contains("io.github.seleniumboot:selenium-boot:3.11.0"));
     }
 
     @Test
