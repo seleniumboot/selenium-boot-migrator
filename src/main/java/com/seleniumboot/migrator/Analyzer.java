@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -39,8 +40,10 @@ public final class Analyzer {
     private static final Set<String> DRIVER_LIFECYCLE_ANNOTATIONS = Set.of(
             "BeforeMethod", "AfterMethod", "BeforeClass", "AfterClass", "BeforeTest", "AfterTest",
             "BeforeSuite", "AfterSuite", "Before", "After", "BeforeEach", "AfterEach", "BeforeAll", "AfterAll");
-    private static final Set<String> EXTENT_REPORTS_TYPES =
-            Set.of("ExtentReports", "ExtentTest", "ExtentSparkReporter");
+    private static final Map<String, String> EXTENT_REPORTS_TYPES = Map.of(
+            "ExtentReports", "com.aventstack.extentreports.ExtentReports",
+            "ExtentTest", "com.aventstack.extentreports.ExtentTest",
+            "ExtentSparkReporter", "com.aventstack.extentreports.reporter.ExtentSparkReporter");
 
     private final JavaParser parser = new JavaParser(
             new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25));
@@ -170,7 +173,7 @@ public final class Analyzer {
             });
         // MIG-018: ExtentReports declarations and object creation (flag only)
         cu.findAll(ClassOrInterfaceType.class).stream()
-                .filter(type -> EXTENT_REPORTS_TYPES.contains(type.getNameAsString()))
+                .filter(type -> isExtentReportsType(cu, type))
                 .filter(type -> type.getParentNode().map(parent ->
                         parent instanceof VariableDeclarator || parent instanceof Parameter
                                 || parent instanceof MethodDeclaration || parent instanceof ObjectCreationExpr)
@@ -180,6 +183,17 @@ public final class Analyzer {
                                 + "Remove after migrating custom logging to StepLogger."))
                 .distinct()
                 .forEach(out::add);
+    }
+
+    private boolean isExtentReportsType(CompilationUnit cu, ClassOrInterfaceType type) {
+        String simpleName = type.getNameAsString();
+        String qualifiedName = EXTENT_REPORTS_TYPES.get(simpleName);
+        if (qualifiedName == null) return false;
+        if (type.getScope().isPresent()) return qualifiedName.equals(type.getNameWithScope());
+        return cu.getImports().stream()
+                .filter(declaration -> !declaration.isAsterisk())
+                .filter(declaration -> declaration.getName().getIdentifier().equals(simpleName))
+                .noneMatch(declaration -> !declaration.getNameAsString().equals(qualifiedName));
     }
 
     private boolean isDriverLifecycleMethod(MethodDeclaration method) {

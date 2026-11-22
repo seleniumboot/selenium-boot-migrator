@@ -87,6 +87,22 @@ class AnalyzerTest {
     }
 
     @Test
+    void checksPackageWhenExtentReportsTypeNamesCollide() {
+        var report = new Analyzer().analyzeSource("""
+            import example.reporting.ExtentReports;
+            class LoginTest {
+                ExtentReports unrelated = new ExtentReports();
+                example.reporting.ExtentTest other;
+                com.aventstack.extentreports.ExtentReports actual;
+            }
+            """);
+        assertTrue(report.unparsable().isEmpty());
+        var findings = report.findings().stream()
+                .filter(finding -> finding.ruleId().equals("MIG-018")).toList();
+        assertEquals(List.of(5), findings.stream().map(Finding::line).toList());
+    }
+
+    @Test
     void detectsTestNgDriverLifecycleMethods() throws Exception {
         var findings = new Analyzer().analyze(fixture("lifecycle-testng")).findings().stream()
                 .filter(finding -> finding.ruleId().equals("MIG-017")).toList();
