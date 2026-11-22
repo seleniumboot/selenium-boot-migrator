@@ -7,6 +7,8 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
@@ -18,6 +20,7 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,6 +39,8 @@ public final class Analyzer {
     private static final Set<String> DRIVER_LIFECYCLE_ANNOTATIONS = Set.of(
             "BeforeMethod", "AfterMethod", "BeforeClass", "AfterClass", "BeforeTest", "AfterTest",
             "BeforeSuite", "AfterSuite", "Before", "After", "BeforeEach", "AfterEach", "BeforeAll", "AfterAll");
+    private static final Set<String> EXTENT_REPORTS_TYPES =
+            Set.of("ExtentReports", "ExtentTest", "ExtentSparkReporter");
 
     private final JavaParser parser = new JavaParser(
             new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25));
@@ -163,6 +168,18 @@ public final class Analyzer {
                     ? "Delete the lifecycle glue; extend BaseTest. Driver creation, per-thread isolation, and teardown are handled for you."
                     : "Remove the driver setup; keep the rest."));
             });
+        // MIG-018: ExtentReports declarations and object creation (flag only)
+        cu.findAll(ClassOrInterfaceType.class).stream()
+                .filter(type -> EXTENT_REPORTS_TYPES.contains(type.getNameAsString()))
+                .filter(type -> type.getParentNode().map(parent ->
+                        parent instanceof VariableDeclarator || parent instanceof Parameter
+                                || parent instanceof MethodDeclaration || parent instanceof ObjectCreationExpr)
+                        .orElse(false))
+                .map(type -> new Finding("MIG-018", MANUAL, file, line(type), type.getNameAsString(),
+                        "ExtentReports: Selenium Boot generates an HTML report out of the box. "
+                                + "Remove after migrating custom logging to StepLogger."))
+                .distinct()
+                .forEach(out::add);
     }
 
     private boolean isDriverLifecycleMethod(MethodDeclaration method) {

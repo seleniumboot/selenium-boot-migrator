@@ -48,6 +48,45 @@ class AnalyzerTest {
     }
 
     @Test
+    void reportsExtentReportsDeclarationsAndCreations() {
+        var report = new Analyzer().analyzeSource("""
+            import com.aventstack.extentreports.ExtentReports;
+            import com.aventstack.extentreports.ExtentTest;
+            import com.aventstack.extentreports.reporter.ExtentSparkReporter;
+            class LoginTest {
+                private ExtentTest test;
+                void setup() {
+                    ExtentReports reports = new ExtentReports();
+                    reports.attachReporter(new ExtentSparkReporter("report.html"));
+                }
+            }
+            """);
+        assertTrue(report.unparsable().isEmpty());
+        var findings = report.findings().stream()
+                .filter(finding -> finding.ruleId().equals("MIG-018")).toList();
+        assertEquals(List.of("ExtentTest", "ExtentReports", "ExtentSparkReporter"),
+                findings.stream().map(Finding::detected).toList());
+        assertEquals(List.of(5, 7, 8), findings.stream().map(Finding::line).toList());
+        assertTrue(findings.stream().allMatch(finding -> finding.status() == Finding.Status.MANUAL));
+        assertTrue(report.render().contains("MIG-018 (ExtentReports usage)"));
+    }
+
+    @Test
+    void ignoresUnrelatedCodeWhenLookingForExtentReports() {
+        var report = new Analyzer().analyzeSource("""
+            class LoginTest {
+                // ExtentReports is mentioned here but never used.
+                void run() {
+                    String name = "ExtentTest";
+                    ExtentReportsHelper helper = new ExtentReportsHelper();
+                }
+            }
+            """);
+        assertTrue(report.unparsable().isEmpty());
+        assertFalse(report.findings().stream().anyMatch(finding -> finding.ruleId().equals("MIG-018")));
+    }
+
+    @Test
     void detectsTestNgDriverLifecycleMethods() throws Exception {
         var findings = new Analyzer().analyze(fixture("lifecycle-testng")).findings().stream()
                 .filter(finding -> finding.ruleId().equals("MIG-017")).toList();
