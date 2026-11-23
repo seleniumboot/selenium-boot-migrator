@@ -103,9 +103,18 @@ public record Report(int filesFound, int filesParsed, List<String> unparsable, L
 
     private static String ruleLabel(String ruleId) {
         return switch (ruleId) {
+            case "MIG-001" -> "MIG-001 (ThreadLocal<WebDriver> driver factory)";
+            case "MIG-002" -> "MIG-002 (WebDriverManager.setup() calls)";
+            case "MIG-003" -> "MIG-003 (WebDriverWait / ExpectedConditions)";
+            case "MIG-004" -> "MIG-004 (Retry analyzer / annotation transformer)";
+            case "MIG-005" -> "MIG-005 (Screenshot-on-failure listener)";
             case "MIG-010" -> "MIG-010 (Page objects)";
             case "MIG-011" -> "MIG-011 (@FindBy fields)";
             case "MIG-012" -> "MIG-012 (PageFactory.initElements calls)";
+            case "MIG-014" -> "MIG-014 (Thread.sleep() calls)";
+            case "MIG-015" -> "MIG-015 (Custom DriverManager / DriverFactory)";
+            case "MIG-016" -> "MIG-016 (Implicit waits)";
+            case "MIG-017" -> "MIG-017 (Driver lifecycle code / references to removed classes)";
             case "MIG-018" -> "MIG-018 (ExtentReports usage)";
             case "MIG-019" -> "MIG-019 (Properties-based config)";
             default -> ruleId;
