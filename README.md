@@ -243,6 +243,7 @@ Each rule follows the [Selenium + TestNG migration guide](https://docs.seleniumb
 | MIG-015 | Custom `*DriverManager` / `*DriverFactory` | Manual review |
 | MIG-016 | `implicitlyWait` | Remove; manual review |
 | MIG-017 | References to classes removed by migration | Update the caller before compiling |
+| MIG-018 | ExtentReports usage (`ExtentReports`, `ExtentTest`, `ExtentSparkReporter`) | Manual review. Selenium Boot generates an HTML report. |
 
 The Selenium Boot [getting-started guide](https://docs.seleniumboot.com/docs/getting-started) documents page objects extending `BasePage`, with a `WebDriver` constructor and `By` locator fields. It does not document `@FindBy` or `PageFactory.initElements`; the analyzer therefore reports their counts for review rather than treating them as a direct `BasePage` mapping.
 
