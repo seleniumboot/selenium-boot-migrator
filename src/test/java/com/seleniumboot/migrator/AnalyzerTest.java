@@ -519,6 +519,57 @@ class AnalyzerTest {
     }
 
     @Test
+    void detectsPropertiesBasedConfigInFixture() throws Exception {
+        var findings = new Analyzer().analyze(fixture("properties-config")).findings().stream()
+                .filter(finding -> finding.ruleId().equals("MIG-019")).toList();
+
+        assertEquals(4, findings.size());
+        assertTrue(findings.stream().allMatch(finding -> finding.status() == Finding.Status.MANUAL));
+        assertTrue(findings.stream().allMatch(finding -> finding.advice().contains("selenium-boot.yml")));
+        assertTrue(findings.stream().anyMatch(finding -> finding.detected().equals("Properties.load(...)")));
+        assertTrue(findings.stream().anyMatch(finding -> finding.detected().equals("new FileInputStream(\"...properties\")")));
+        assertTrue(findings.stream().anyMatch(finding -> finding.detected().equals("getResourceAsStream(\"...properties\")")));
+    }
+
+    @Test
+    void propertiesConfigRuleIgnoresPlainTestClass() {
+        var report = new Analyzer().analyzeSource("""
+                class PlainTest {
+                    @Test void works() { assertTrue(true); }
+                }
+                """);
+        assertFalse(report.findings().stream().anyMatch(finding -> finding.ruleId().equals("MIG-019")));
+    }
+
+    @Test
+    void propertiesConfigRuleIgnoresNonPropertiesStreams() {
+        var report = new Analyzer().analyzeSource("""
+                import java.io.FileInputStream;
+                class Reader {
+                    Object read() throws Exception {
+                        return new FileInputStream("data.csv");
+                    }
+                }
+                """);
+        assertFalse(report.findings().stream().anyMatch(finding -> finding.ruleId().equals("MIG-019")));
+    }
+
+    @Test
+    void propertiesConfigRuleHasLabelInRenderedReport() {
+        var report = new Analyzer().analyzeSource("""
+                import java.util.Properties;
+                import java.io.FileInputStream;
+                class Config {
+                    void load() throws Exception {
+                        Properties props = new Properties();
+                        props.load(new FileInputStream("config.properties"));
+                    }
+                }
+                """);
+        assertTrue(report.render().contains("MIG-019 (Properties-based config):"));
+    }
+
+    @Test
     void ignoresNonSeleniumByLikeCalls() {
         var report = new Analyzer().analyzeSource("""
                 class LocatorPage {

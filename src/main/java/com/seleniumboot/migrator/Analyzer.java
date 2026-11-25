@@ -15,6 +15,7 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.ThisExpr;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,6 +38,10 @@ import static com.seleniumboot.migrator.Finding.Status.MANUAL;
 
 /** Read-only static analysis: parses Java sources and reports patterns that map onto Selenium Boot. */
 public final class Analyzer {
+
+    private static final String PROPERTIES_CONFIG_ADVICE =
+            "Properties-based config: move these values to selenium-boot.yml"
+            + " (see docs.seleniumboot.com/docs/configuration).";
 
     private static final Set<String> DRIVER_LIFECYCLE_ANNOTATIONS = Set.of(
             "BeforeMethod", "AfterMethod", "BeforeClass", "AfterClass", "BeforeTest", "AfterTest",
@@ -159,6 +165,25 @@ public final class Analyzer {
                 .filter(c -> c.getNameAsString().endsWith("DriverManager") || c.getNameAsString().endsWith("DriverFactory"))
                 .forEach(c -> out.add(new Finding("MIG-015", MANUAL, file, line(c), c.getNameAsString(),
                         "Custom driver lifecycle: review, then replace with BaseTest.")));
+        // MIG-019: config loaded from .properties files (flag only)
+        Set<String> propertiesVariables = propertiesVariableNames(cu);
+        cu.findAll(MethodCallExpr.class).forEach(m -> {
+            if (m.getNameAsString().equals("load")
+                    && m.getScope().map(s -> isPropertiesVariable(s, propertiesVariables)).orElse(false)) {
+                out.add(new Finding("MIG-019", MANUAL, file, line(m), "Properties.load(...)",
+                        PROPERTIES_CONFIG_ADVICE));
+            }
+            if (m.getNameAsString().equals("getResourceAsStream")
+                    && m.getArguments().stream().anyMatch(Analyzer::isPropertiesLiteral)) {
+                out.add(new Finding("MIG-019", MANUAL, file, line(m), "getResourceAsStream(\"...properties\")",
+                        PROPERTIES_CONFIG_ADVICE));
+            }
+        });
+        cu.findAll(ObjectCreationExpr.class).stream()
+                .filter(c -> c.getType().getNameAsString().equals("FileInputStream"))
+                .filter(c -> c.getArguments().stream().anyMatch(Analyzer::isPropertiesLiteral))
+                .forEach(c -> out.add(new Finding("MIG-019", MANUAL, file, line(c), "new FileInputStream(\"...properties\")",
+                        PROPERTIES_CONFIG_ADVICE)));
         // MIG-017: driver lifecycle managed in TestNG or JUnit setup/teardown methods
         cu.findAll(MethodDeclaration.class).stream()
                 .filter(this::isDriverLifecycleMethod)
@@ -249,6 +274,34 @@ public final class Analyzer {
         boolean expectedConditions = statement.findAll(NameExpr.class).stream()
                 .anyMatch(name -> name.getNameAsString().equals("ExpectedConditions"));
         return webDriverWait || expectedConditions;
+    }
+
+    private static Set<String> propertiesVariableNames(CompilationUnit cu) {
+        Set<String> names = new HashSet<>();
+        cu.findAll(VariableDeclarationExpr.class).stream()
+                .filter(v -> isPropertiesType(v.getElementType().asString()))
+                .forEach(v -> v.getVariables().forEach(variable -> names.add(variable.getNameAsString())));
+        cu.findAll(FieldDeclaration.class).stream()
+                .filter(f -> isPropertiesType(f.getElementType().asString()))
+                .forEach(f -> f.getVariables().forEach(variable -> names.add(variable.getNameAsString())));
+        cu.findAll(com.github.javaparser.ast.body.Parameter.class).stream()
+                .filter(p -> isPropertiesType(p.getType().asString()))
+                .forEach(p -> names.add(p.getNameAsString()));
+        return names;
+    }
+
+    private static boolean isPropertiesType(String type) {
+        return type.equals("Properties") || type.endsWith(".Properties");
+    }
+
+    private static boolean isPropertiesVariable(Expression scope, Set<String> propertiesVariables) {
+        if (scope instanceof NameExpr name) return propertiesVariables.contains(name.getNameAsString());
+        return scope instanceof FieldAccessExpr field && propertiesVariables.contains(field.getNameAsString());
+    }
+
+    private static boolean isPropertiesLiteral(Expression expression) {
+        return expression instanceof StringLiteralExpr string
+                && string.getValue().endsWith(".properties");
     }
 
     private static int line(Node n) {

@@ -107,6 +107,7 @@ public record Report(int filesFound, int filesParsed, List<String> unparsable, L
             case "MIG-011" -> "MIG-011 (@FindBy fields)";
             case "MIG-012" -> "MIG-012 (PageFactory.initElements calls)";
             case "MIG-018" -> "MIG-018 (ExtentReports usage)";
+            case "MIG-019" -> "MIG-019 (Properties-based config)";
             default -> ruleId;
         };
     }
