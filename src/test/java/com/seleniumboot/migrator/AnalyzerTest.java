@@ -196,7 +196,6 @@ class AnalyzerTest {
         assertTrue(report.render().contains("MIG-011 (@FindBy fields):"));
     }
 
-    // NEW TEST ADDED FOR ISSUE #36
     @Test
     void rendersHumanReadableLabelForThreadLocalDriverRule() {
         var report = new Analyzer().analyzeSource("""
