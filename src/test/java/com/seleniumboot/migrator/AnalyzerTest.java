@@ -197,6 +197,19 @@ class AnalyzerTest {
     }
 
     @Test
+    void rendersHumanReadableLabelForThreadLocalDriverRule() {
+        var report = new Analyzer().analyzeSource("""
+                class DriverFactory {
+                    private static final ThreadLocal<WebDriver> DRIVER = new ThreadLocal<>();
+                }
+                """);
+
+        assertTrue(report.render().contains(
+                "MIG-001 (ThreadLocal<WebDriver> driver factory):"
+        ));
+    }
+
+    @Test
     void plainClassHasNoFindingsAndFullConfidence() {
         var report = new Analyzer().analyzeSource("class Plain { int x; }");
         assertTrue(report.findings().isEmpty());
